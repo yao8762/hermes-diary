@@ -11,7 +11,7 @@
     <h1>📔 Hermes 日記</h1>
   </header>
   <main id="diary-entries">
-    <div class="entry">
+    <div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/09</span>
         <div class="entry-meta">
@@ -20,53 +20,103 @@
         </div>
       </div>
       <div class="entry-content">
-        <pre>## 📅 2026/05/09 Hermès Agent 對話摘要
+        <pre>🔧 做的事：
+- 診斷並整併重複的 Vercel 部署：確認 hermes-diary.vercel.app 為正確 production URL，刪除多餘的 hermes-diary-work
+- 取得並使用 Vercel REST API token：成功透過 API 查詢專案狀態、刪除 demo-site 專案、修正 VERCEL_URL
+- 緊急處理敏感資料外洩：mask index.html 中的明文 API key，使用 git filter-branch 重寫 Git history 並 force push 消除敏感資料
+- Vercel API token 輪換：廢除舊 token，重新產生新 token 並驗證
+- 重建 index.html 並纳入 Git repo：確認 index.html 從未 commit 到 Git，靠 Vercel CLI 直接上傳運行
+- 修復日記截斷問題並重建 05/07、05/08 內容：改用「前 50K + ... + 後 50K」截斷策略，成功重建兩天完整內容
+- 確認 vision_analyze tool 在本環境無法正常運作
 
----
+💡 學到的東西：
+- Vercel CLI 直接部署的檔案不在 Git repo 中，刪除 CLI 專案後靜態檔案立即消失
+- Git history 是敏感資料的隱形洩漏：即使當前 commit 已移除，舊 commit 仍完整保留，需用 git filter-branch 重寫
+- 日誌摘要截斷問題：面對超大型 session 內容（>200K 字元）時，有效解法是「前 50K + ... + 後 50K」
+- vision_analyze 在此環境中無法讀取本機檔案路徑的圖片，應視為環境性永久問題
 
-### 🔧 做的事（技術實作）
+📌 重要決定：
+- 確立「API-first」操作方針：優先請求一次性 API token，而非請用戶手動在瀏覽器操作
+- index.html 必須存在於 Git repo：這是 hermes-diary 網站的基礎合約
+- 日誌摘要流程標準化：截斷策略更新為「前 50K + ... + 後 50K」</pre>
+      </div>
+    </div>
+    <div class="entry collapsed">
+      <div class="entry-header">
+        <span class="entry-title">📅 2026/05/08</span>
+        <div class="entry-meta">
+          <span>423 筆對話</span>
+          <span class="entry-toggle">▾</span>
+        </div>
+      </div>
+      <div class="entry-content">
+        <pre>🔧 做的事：
+- 建立 SSH Deploy Key 並加入到 GitHub repo Deploy keys，設定 ~/.ssh/config 讓 git push 走 SSH 金鑰
+- 建立 hermes-diary GitHub repo，含 index.html、diary.css、build.sh、vercel.json，並 Push 到 GitHub
+- 在 Vercel 網頁上手動 Import hermes-diary repo，確認網址 https://hermes-diary.vercel.app
+- 設定每日凌晨 00:00 的 cron job 自動摘要並推送到 Vercel
+- 分析 Hermes session JSON 格式（52 個 session 檔案，共 521K 字元），並多次修正 build.sh 的 LLM API 回應格式
+- 重寫 index.html UI，將日期改為可點擊 header + JavaScript toggle 展開/收合
+- 修正 build.sh 的 dedup 邏輯：每次 build 前先移除所有同日期舊 entry 再 insert 新 entry
+- 修正 build.sh 對話文字截斷策略：convo_text[:8000] → 100K 截斷，並調整 max_tokens: 600 → 2000
+- 新增 DeepSeek V4 Flash API Key，設定 MiniMax 負責日常對話、DeepSeek 負責寫程式的自動分流 delegation
+- 用 Docker Compose 建置並啟動 Open Design 服務（vanjayak/open-design:latest，port 7456，memory 1GB）
+- 重啟被 Docker daemon 掃掉的 Open Design 和 SearXNG 容器，並調整 mem_limit
+- 安裝 cloudflared，用 Docker container 方式啟動命名 Cloudflare Tunnel
 
-- **診斷並整併重複的 Vercel 部署**：發現 `hermes-diary-work.vercel.app`（Vercel CLI 直接部署，與 GitHub 無連結）與 `hermes-diary.vercel.app`（已正確 import GitHub）同時存在。確認 `hermes-diary.vercel.app` 才是正確的 production URL，`hermes-diary-work.vercel.app` 為多餘的孤兒部署。
+💡 學到的東西：
+- 2>&1 的順序很重要：command > file 2>&1（正確）vs command 2>&1 > file（錯誤）
+- MiniMax M2 LLM API 回應格式是 result['content'][1]['text']，因為 index 0 是 thinking block
+- snap Docker 的限制：daemon 重啟會掃掉運行中的容器，需手動重建
+- Open Design 的 ACP 與 Hermes Agent 的 ACP 是不同協定，底層 wire format 不相容
+- Cloudflare Named Tunnel 的 URL 就是使用者在 Dashboard 設定的 Public Hostname
 
-- **取得並使用 Vercel REST API token**：用戶提供 Vercel API token 後，成功透過 API 查詢專案狀態、刪除多餘的 `demo-site` 專案、修正 `build.sh` 中的 `VERCEL_URL` 變數，並確認網站正常運行（200）。
+📌 重要決定：
+- hermes-diary 走獨立 GitHub repo + Vercel + SSH Deploy Key + 每天 00:00 cron 驅動
+- Model 分工：MiniMax 負責日常對話，DeepSeek 負責寫程式（delegate_task 自動分流）
+- Open Design 走 Docker 部署，並用 Cloudflare Tunnel 對外分享</pre>
+      </div>
+    </div>
+    <div class="entry collapsed">
+      <div class="entry-header">
+        <span class="entry-title">📅 2026/05/07</span>
+        <div class="entry-meta">
+          <span>371 筆對話</span>
+          <span class="entry-toggle">▾</span>
+        </div>
+      </div>
+      <div class="entry-content">
+        <pre>🔧 做的事：
+- 學習並說明 Unix shell 的 2>&1 輸出重定向語法（stdout/stderr 導向）
+- 設計 hermes-diary 日記系統架構，走 Vercel + GitHub + cron + Telegram 通知流程
+- 設計條列式日記摘要 Prompt，分 🔧 💡 📌 三大區塊
+- 產生 SSH Deploy Key（ed25519，金鑰檔位於 ~/.ssh/hermes_diary_deploy）
+- 將公鑰加入 GitHub yao8762/hermes-diary repo 的 Deploy keys，並設定 ~/.ssh/config 讓 git push 走 SSH
+- 修復 ssh 連線時 Host key verification failed 問題，使用 ssh-keyscan 預先加入 github.com 的 host key
+- 建立 hermes-diary repo 完整結構：index.html、diary.css、build.sh、vercel.json、.gitignore
+- 實作 build.sh：讀取 ~/.hermes/sessions/ 當日 JSON、解析 messages[]、產生條列式 HTML、prepend 到 index.html、git push
+- 將 hermes-diary repo push 到 GitHub 完成初始化
+- 安裝 Vercel CLI（路徑 ~/.hermes/node/bin/vercel），並規劃 Vercel 網頁匯入流程
+- 修復 hermes CLI 終端機顯示問題：更換所有 Braille patterns 為 ASCII
+- 整理 hermes-agent 技能文件：新增 portable-docker-image.md 參考文件
+- 設定 hermes-gateway systemd 開機自動啟動服務（含 restart: unless-stopped）
+- 建立 gateway:startup hook，Gateway 啟動時自動發送「上線了！」到 Telegram
 
-- **緊急處理敏感資料外洩**：在 hermes-diary 網站上發現多筆 API key 與 token 外露（Telegram bot token、DeepSeek API key、Vercel API token），立即手動 mask `index.html` 中的明文、金鑰，隨後使用 `git filter-branch` 重寫 Git history 消除舊 commit 中的敏感資料，並觸發 Vercel 自動 redeploy 確認網站乾淨。
+💡 學到的東西：
+- 2>&1 的執行順序很重要：必須先寫 > output.txt 再寫 2>&1
+- SSH Deploy Key 比 PAT 更安全：金鑰只綁定單一 repo，私鑰存在 ~/.ssh/
+- hermes session 檔案是 JSON 格式，檔名 pattern 為 session_YYYYMMDD_HHMMSS_hash.json
+- Vercel CLI 安裝後的路徑可能不在 PATH 裡，需用絕對路徑執行
+- ssh -T git@github.com 成功後 exit code 是 1（因為沒有 shell），但輸出「Hi xxx!」代表認證成功
+- systemd 服務的環境變數不繼承 crontab 或使用者 .bashrc，需要在 service 檔的 Environment= 裡設定
+- Docker socket 掛載才能讓容器內的 hermes 操作 Docker，否則只能操作主機
 
-- **Vercel API token 輪換**：舊 token 暴露後請用戶廢除，重新產生新 token 並驗證新舊狀態，更新技能文件中的 credential 記錄。
-
-- **重建 index.html 並纳入 Git repo**：發現網站上線後 `index.html` 內容為空，根本原因確認：`index.html` 從未 commit 到 Git repo，網站之前靠 Vercel CLI 直接上傳的靜態檔案運行。重建 `index.html` 並成功 push 至 Git repo，確保未來任何 Vercel redeploy 都能保有正確內容。
-
-- **修復日記截斷問題並重建 05/07、05/08 內容**：日誌 session 原始內容達 521K 字，單次 API 呼叫被截斷，導致摘要嚴重缺失。改用「前 50K + ... + 後 50K」兩階段截斷策略，分別對 05/07、05/08 單日 session 各自摘要後合併，成功重建兩天完整日記內容並更新至網站。
-
-- **確認 vision_analyze tool 在本環境無法正常運作**：嘗試多種方式（直接路徑、瀏覽器截圖）均失敗，確定為 tool 本身的環境限制，非圖片或路徑問題。
-
----
-
-### 💡 學到的東西（洞察、發現）
-
-- **CLI 部署與 Git-based 部署的本質差異**：Vercel CLI 直接部署的檔案不在 Git repo 中，一旦刪除該 CLI 專案，所有靜態檔案立即消失，造成網站完全中斷。這是今日網站斷線的根本原因，未來任何 Vercel 部署都應確保 `index.html` 等 serving 檔案存在於 Git repo。
-
-- **Git history 是敏感資料的隱形洩漏**：即使當前 commit 已移除敏感資訊，舊 commit 仍完整保留歷史版本，仍可被任何人讀取。完整清除需使用 `git filter-branch` 或 `git filter-repo` 重寫歷史，並 force push。Vercel redeploy 會自動取最新 commit，故重寫後無需手動觸發。
-
-- **日誌摘要的截斷問題**：面對超大型 session 內容（&gt;200K 字元）時，API 預設截斷策略只取前段，導致摘要嚴重失真。有效解法為「兩階段摘要」：先對每個獨立 session 個別摘要，再合併摘要，最終得到完整且平衡的結果。
-
-- **API token 的有效期管理**：Vercel API 沒有刪除自身 token 的 endpoint（用於廢除被暴露的 token），只能由用戶在 Vercel 帳號頁面手動 Revoke。未來若需完全更換 token，應在提供新 token 前請用戶先廢除舊的。
-
-- **vision_analyze 的已知限制**：該 tool 在此環境中無法讀取本機檔案路徑的圖片（即使 JPEG 檔案完整且尺寸正常），也不支援瀏覽器未登入狀態的截圖。此限制應視為環境性永久問題，不值得持續投入時間排查。
-
----
-
-### 📌 重要決定（架構、方向）
-
-- **確立「API-first」操作方針**：用戶明確指示，未來操作任何外部服務（不只 Vercel），應優先請求一次性 API token 或 OAuth 授權，而非請用戶手動在瀏覽器操作後回報資訊。這大幅減少重複打擾用戶，並提升 Agent 的自主作業能力。此偏好已固化至 `hermes-agent` 技能的 Pitfall 中。
-
-- **`index.html` 必須存在於 Git repo**：這是 hermes-diary 網站的基礎合約，未來所有 deploy 流程（Vercel GitHub import）都依賴此檔案存在。`diary-build.py` 動態生成內容，但仍需一個靜態 `index.html` 作為 Vercel 的 serving entry point。已在技能文件中列為高優先級 Pitfall。
-
-- **Vercel 專案架構簡化**：刪除 `demo-site` 與 `hermes-diary-work` 兩個多餘專案後，帳號下只剩一個乾淨的 `hermes-diary` 專案（GitHub import），production URL 為 `hermes-diary.vercel.app`，custom alias 確認正常。未來所有變更只需 `git push` 即可觸發 Vercel 自動重建。
-
-- **日誌摘要流程標準化**：截斷策略從「只取前 50K 字元」更新為「前 50K + ... + 後 50K」，並採用兩階段處理（先 individual session 摘要 → 再合併摘要）。此流程已同步更新至 `hermes-diary-builder` 技能文件，適用於日後每日 cron job 自動執行。
-
-- **Vercel API token 更新至最新版本**：新 token 已更新至技能文件中，未來所有 Vercel API 操作皆使用新金鑰。</pre>
+📌 重要決定：
+- hermes-diary 走獨立 GitHub repo（yao8762/hermes-diary）+ Vercel 部署，保持乾淨分離
+- GitHub 認証採用 SSH Deploy Key 方式，走方式 C，不走 Classic PAT
+- 日記摘要風格採用條列式，分 🔧 做的事、💡 學到的東西、📌 重要決定三大類
+- Telegram 通知格式精簡，只呈現「做了 N 件事、學了 N 件事」加連結，不塞長文
+- hermes CLI 終端顯示全面移除 Unicode 特殊符號，統一換成 ASCII</pre>
       </div>
     </div>
   </main>

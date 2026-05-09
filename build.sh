@@ -76,11 +76,15 @@ for m in data.get('messages', []):
 ${USER_MSGS}"
 done
 
-# 限制在 200000 字
-CONVO_TEXT="${CONVO_TEXT:0:200000}"
+# 截斷：超過 100K 字時用「前 50K + ... + 後 50K」
+if [ ${#CONVO_TEXT} -gt 100000 ]; then
+  CONVO_TEXT="${CONVO_TEXT:0:50000}
+...[中間省略]...
+${CONVO_TEXT: -50000}"
+fi
 export CONVO_TEXT
 
-#------------------- LLM 摘要（結果寫入 temp 檔） -------------------
+#------------------- LLM 摘要 -------------------
 SUMMARY_TMP=$(mktemp)
 export YESTERDAY TODAY_DISPLAY LLM_API_KEY LLM_API_BASE LLM_MODEL
 
@@ -109,23 +113,15 @@ prompt = '''你是一個日誌摘要機器。將以下對話記錄濃縮成條�
 （共 ''' + msg_count + ''' 筆對話）
 
 ### 🔧 做的事
-列出所有實質操作，每條一行為動詞開頭，範例：
-- 使用 docker build 建置了 hermes-portable 映像
-- 設定 SSH deploy key 讓 git push 可以自動化
-- 放棄使用 docker run alias 方案，改用自建 image
+列出所有實質操作，每條一行為動詞開頭。
 
 ### 💡 學到的東西
-每條一行，說明從錯誤或實驗中得到的具體知識，範例：
-- 容器內的 hermes 用戶 UID 10000 與主機 UID 1000 不同，會造成資料寫入權限問題
-- Vercel CLI 需登入才能部署，改用 GitHub integration 較簡單
+每條一行，說明從錯誤或實驗中得到的具體知識。
 
 ### 📌 重要決定
-每條一行，說明採用的方案及放棄的替代方案，範例：
-- 採用方案二（自建 Docker image），放棄方案一（docker run alias）因為攜帶不便
-- 使用 SSH deploy key 而非 PAT，避免明文 token 風險
+每條一行，說明採用的方案及放棄的替代方案。
 
 要求：
-- 必須列出所有重要操作，不能遺漏 hermes-diary、Telegram hook 等專案
 - 🔧 至少 5 條，💡 至少 3 條，📌 至少 2 條
 - 保持繁體中文
 - 不要臆測，純粹根據對話內容
@@ -146,15 +142,14 @@ req = urllib.request.Request(
     headers={
         'Authorization': 'Bearer ' + llm_api_key,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://hermes-diary',
-        'X-Title': 'Hermes-Diary',
+        'anthropic-version': '2023-06-01',
     },
     method='POST'
 )
 
-with urllib.request.urlopen(req, timeout=30) as resp:
+with urllib.request.urlopen(req, timeout=120) as resp:
     result = json.load(resp)
-    summary = result['content'][0]['text']
+    summary = next((c['text'] for c in result['content'] if c.get('type') == 'text'), '')
 
 with open(out_path, 'w', encoding='utf-8') as f:
     f.write(summary)
@@ -168,7 +163,7 @@ if [ -z "$SUMMARY" ]; then
   exit 1
 fi
 
-#------------------- 更新 HTML -------------------
+#------------------- 更新 HTML（只移除同日舊 entry，保留其他） -------------------
 ENTRY_HTML="<div class=\"entry\">
   <div class=\"entry-header\">
     <span class=\"entry-title\">📅 ${TODAY_DISPLAY}</span>
@@ -182,38 +177,42 @@ ENTRY_HTML="<div class=\"entry\">
   </div>
 </div>"
 
-# 把 ENTRY_HTML 寫入 temp 檔，避免 shell injection
 ENTRY_TMP=$(mktemp)
 echo "$ENTRY_HTML" > "$ENTRY_TMP"
 
-python3 - "$REPO_DIR/index.html" "$ENTRY_TMP" <<'PYEOF'
+python3 - "$REPO_DIR/index.html" "$ENTRY_TMP" "$TODAY_DISPLAY" <<'PYEOF'
 import sys, re
 html_path = sys.argv[1]
 entry_path = sys.argv[2]
+today_display = sys.argv[3]  # e.g. "2026/05/09"
 
 with open(html_path, 'r', encoding='utf-8') as f:
     html = f.read()
 with open(entry_path, 'r', encoding='utf-8') as f:
     entry_html = f.read()
 
-# 移除所有現有 entry div
-html = re.sub(
-    r'\n  <div class="entry">.*?</div>\n',
-    '\n',
-    html,
-    flags=re.DOTALL
-)
+# Find main block
+main_start = html.find('<main id="diary-entries">') + len('<main id="diary-entries">')
+main_end = html.find('</main>', main_start)
+main_content = html[main_start:main_end]
 
-# 在 <main>...</main> 裡插入新 entry
-html = re.sub(
-    r'(<main id="diary-entries">)',
-    r'\1\n  ' + entry_html,
-    html,
-    count=1
-)
+# Find all existing entry dates
+existing_dates = re.findall(r'<span class="entry-title">📅 (\d+/\d+/\d+)</span>', main_content)
+
+# Only remove entry for the same date (sameday update)
+if today_display in existing_dates:
+    # Remove the div with that date
+    pattern = r'\n    <div class="entry[^"]*">.*?<span class="entry-title">📅 ' + re.escape(today_display) + r'.*?</div>\n'
+    main_content = re.sub(pattern, '\n', main_content, flags=re.DOTALL)
+
+# Prepend new entry with collapsed class (new entries are collapsed by default)
+entry_with_collapse = entry_html.replace('<div class="entry">', '<div class="entry collapsed">')
+new_main_content = entry_with_collapse + '\n' + main_content
+
+new_html = html[:main_start] + '\n' + new_main_content + '\n  ' + html[main_end:]
 
 with open(html_path, 'w', encoding='utf-8') as f:
-    f.write(html)
+    f.write(new_html)
 PYEOF
 
 rm -f "$ENTRY_TMP"
