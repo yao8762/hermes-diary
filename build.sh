@@ -164,18 +164,18 @@ if [ -z "$SUMMARY" ]; then
 fi
 
 #------------------- 更新 HTML（只移除同日舊 entry，保留其他） -------------------
-ENTRY_HTML="<div class=\"entry\">
-  <div class=\"entry-header\">
-    <span class=\"entry-title\">📅 ${TODAY_DISPLAY}</span>
-    <div class=\"entry-meta\">
-      <span>${MSG_COUNT} 筆對話</span>
-      <span class=\"entry-toggle\">▾</span>
-    </div>
-  </div>
-  <div class=\"entry-content\">
-    <pre>${SUMMARY}</pre>
-  </div>
-</div>"
+ENTRY_HTML="    <div class=\"entry\">
+      <div class=\"entry-header\">
+        <span class=\"entry-title\">📅 ${TODAY_DISPLAY}</span>
+        <div class=\"entry-meta\">
+          <span>${MSG_COUNT} 筆對話</span>
+          <span class=\"entry-toggle\">▾</span>
+        </div>
+      </div>
+      <div class=\"entry-content\">
+        <pre>${SUMMARY}</pre>
+      </div>
+    </div>"
 
 ENTRY_TMP=$(mktemp)
 echo "$ENTRY_HTML" > "$ENTRY_TMP"
@@ -201,9 +201,16 @@ existing_dates = re.findall(r'<span class="entry-title">📅 (\d+/\d+/\d+)</span
 
 # Only remove entry for the same date (sameday update)
 if today_display in existing_dates:
-    # Remove the div with that date
-    pattern = r'\n    <div class="entry[^"]*">.*?<span class="entry-title">📅 ' + re.escape(today_display) + r'.*?</div>\n'
-    main_content = re.sub(pattern, '\n', main_content, flags=re.DOTALL)
+    # Remove only the entry block for the target date.
+    # Match any entry block, use replacer to filter by date within block.
+    # This handles any indent level (prepended 0-indent or existing 4-indent).
+    any_entry = r'\n(\s*<div class="entry[^"]*">[\s\S]*?</div>\n)(?=\s*<div class="entry[ >\"]|\s*</main>|\s*$)'
+    def _rm(m):
+        block = m.group(1)
+        if '📅 ' + today_display in block:
+            return '\n'
+        return m.group(0)
+    main_content = re.sub(any_entry, _rm, main_content)
 
 # Prepend new entry with collapsed class (new entries are collapsed by default)
 entry_with_collapse = entry_html.replace('<div class="entry">', '<div class="entry collapsed">')
