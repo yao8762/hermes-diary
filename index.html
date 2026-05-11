@@ -12,6 +12,77 @@
   </header>
   <main id="diary-entries">
     <div class="entry collapsed">
+      <div class="entry-header">
+        <span class="entry-title">📅 2026/05/11</span>
+        <div class="entry-meta">
+          <span>114 筆對話</span>
+          <span class="entry-toggle">▾</span>
+        </div>
+      </div>
+      <div class="entry-content">
+        <pre>🔧 **做的事（技術實作）**
+
+1. **確認並成功呼叫 MiniMax Music API**
+   - 找到正確 endpoint：`POST https://api.minimax.io/v1/music_generation`
+   - 使用 model `music-2.6`，需攜帶 `lyrics` 欄位（僅有 `prompt` 不足）
+   - 回傳格式為 hex-encoded MP3，需用 `bytes.fromhex()` 解碼成二進制音檔
+   - 先後生成兩版心經歌曲：含英文 Intro 版（150s）與純中文版（113s）
+
+2. **解決 ffmpeg 靜態圖片 loop bug**
+   - Ubuntu 8.0.1 的 ffmpeg 所有 `-loop 1` 相關方式全部失敗（image2 只能輸出 1 frame，約 0.04 秒）
+   - 開發繞過方案：Python 讀取圖片 RGB raw bytes，迴圈寫入 stdout，配合 ffmpeg rawvideo pipe，成功產出 150 秒、1920×1080、25fps 的圖片影片
+   - 實驗三層 overlay 架構（atmosphere + image + glow），測試 blend mode 陷阱
+
+3. **建立 Docker 環境方案**
+   - 因為本機 ffmpeg `-loop 1` 失效，規劃使用 `jrottenberg/ffmpeg:8.0` Docker 映像執行圖片轉影片指令
+   - 測試 `convert`（ImageMagick）將圖片轉為 GIF 後再轉 MP4 的替代路徑
+
+4. **建立最終工作流程**
+   - 確立兩階段審核制：先生成 MP3 供試聽 → 用戶核准後再生成 MP4（節省等待時間）
+   - 提供完整的 Docker ffmpeg 一行指令模板讓用戶未來自行生成 MP4
+
+💡 **學到的東西（洞察、發現）**
+
+1. **MiniMax Music API 的語言行為**
+   - `lyrics` 欄位開頭若有 `[Intro]` 或英文文字，MiniMax 會自動在前面加一段英文朗讀，再唱中文主體
+   - 解決方式：歌詞完全用純中文，不夾帶任何英文結構標籤，即可輸出乾淨的中文歌曲
+
+2. **`duration` 參數不精確**
+   - request 180s → actual 150s；request 300s → actual 113s（中文心經完整長度）
+   - `duration` 僅供參考，實際長度由模型決定，必須用 `ffprobe` 事後確認
+
+3. **ffmpeg overlay 的 `shortest` 陷阱**
+   - overlay filter 不會擴展時長，`shortest=1` 只會截斷（當 image2 只有 1 frame 時即終止）
+   - 正確做法是讓兩個輸入都先變成 150 秒、3750 frames，再做 overlay，順序不能顛倒
+
+4. **New Age 風格可行**
+   - 在 `lyrics` 之外可以多加 `prompt` 欄位描述風格，對音樂情緒有影響
+
+5. **Python rawvideo pipe 是可靠的替代方案**
+   - 當 ffmpeg 內建 loop 失效時，把圖片當成連續 rawvideo frames 輸出到 stdin，是最穩定的解法
+
+📌 **重要決定（架構、方向）**
+
+1. **工作流程定調：MP3 先審批 → MP4 後生成**
+   - 避免每次修改都要等待漫長的影片渲染，節省雙方時間
+
+2. **確定 MiniMax Music API 為主要音樂生成工具**
+   - 放棄嘗試本地 GPU 模型，MiniMax 為雲端 API，無需本地算力
+
+3. **本機 ffmpeg 放棄修復，採用 Docker 方案**
+   - Ubuntu snap ffmpeg 的 `-loop 1` bug 為環境限制，Docker 容器是最乾淨的解決方案
+
+4. **圖片影片製作簡化**
+   - 用戶最終需求只是「圖片 + 音樂上傳 YouTube」，不需要任何特效
+   - 動畫特效在未來有需要時再追加，先確保基礎功能運作
+
+5. **腳本與知識庫建立**
+   - `loop_image_to_video.py` 腳本寫入 `minimax-music` 技能庫的 `scripts/` 目錄
+   - ffmpeg image loop bug 與 Docker 解法寫入 `references/` 目錄，供未來 session 直接查詢</pre>
+      </div>
+    </div>
+
+    <div class="entry collapsed">
   <div class="entry-header">
     <span class="entry-title">📅 2026/05/10</span>
     <div class="entry-meta">
