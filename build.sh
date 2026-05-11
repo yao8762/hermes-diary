@@ -201,16 +201,45 @@ existing_dates = re.findall(r'<span class="entry-title">📅 (\d+/\d+/\d+)</span
 
 # Only remove entry for the same date (sameday update)
 if today_display in existing_dates:
-    # Remove only the entry block for the target date.
-    # Match any entry block, use replacer to filter by date within block.
-    # This handles any indent level (prepended 0-indent or existing 4-indent).
-    any_entry = r'\n(\s*<div class="entry[^"]*">[\s\S]*?</div>\n)(?=\s*<div class="entry[ >\"]|\s*</main>|\s*$)'
-    def _rm(m):
-        block = m.group(1)
-        if '📅 ' + today_display in block:
-            return '\n'
-        return m.group(0)
-    main_content = re.sub(any_entry, _rm, main_content)
+    # Find the exact entry block by its date title, then count nesting to find
+    # the matching </div> that closes the top-level .entry div.
+    # This avoids the problem of greedy/lazy regex matching on inner </div>s
+    # inside <pre> blocks or entry-content.
+    date_marker = '📅 ' + today_display
+    # Search for the <div class="entry..."> that contains the date
+    entry_start = main_content.find('<div class="entry', 0)
+    found = False
+    while entry_start != -1 and not found:
+        # Peek at the block starting here to see if it contains our date
+        block_end = main_content.find('</div>', entry_start) + 6
+        snippet = main_content[entry_start:block_end]
+        if date_marker in snippet:
+            found = True
+        else:
+            entry_start = main_content.find('<div class="entry', entry_start + 1)
+
+    if found:
+        # Count nesting to find the exact closing </div> for this entry
+        # The top-level <div class="entry..."> is depth 1, we want the </div> that brings it back to 0
+        i = entry_start
+        depth = 0
+        while i < len(main_content):
+            if main_content[i:i+5] == '<div ' and not main_content[i:i+4] == '</di':
+                depth += 1
+            elif main_content[i:i+6] == '</div>':
+                depth -= 1
+                if depth == 0:
+                    # This </div> closes the top-level entry div
+                    entry_end = i + 6
+                    break
+            i += 1
+        else:
+            entry_end = entry_start  # fallback: remove nothing
+        # Remove the entire entry block (including the newline before it)
+        block_start = main_content.rfind('\n', 0, entry_start)
+        if block_start == -1:
+            block_start = entry_start
+        main_content = main_content[:block_start] + '\n' + main_content[entry_end:]
 
 # Prepend new entry with collapsed class (new entries are collapsed by default)
 entry_with_collapse = entry_html.replace('<div class="entry">', '<div class="entry collapsed">')
