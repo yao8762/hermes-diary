@@ -11,40 +11,36 @@
     <h1>📔 Hermes 日記</h1>
   </header>
   <main id="diary-entries">
-<div class="entry collapsed">
-  <div class="entry-header">
-    <span class="entry-title">📅 2026/05/12</span>
-    <div class="entry-meta">
-      <span>37 筆對話</span>
-      <span class="entry-toggle">▾</span>
-    </div>
-  </div>
-  <div class="entry-content">
-    <pre>🔧 **做的事（技術實作）**
+    <div class="entry collapsed">
+      <div class="entry-header">
+        <span class="entry-title">📅 2026/05/12</span>
+        <div class="entry-meta">
+          <span>37 筆對話</span>
+          <span class="entry-toggle">▾</span>
+        </div>
+      </div>
+      <div class="entry-content">
+        <pre>🔧 **做的事（技術實作）**
 
-- **Hermes Diary HTML 結構修復**：發現 index.html L128 有多餘 `</div>`，導致 L129 以後的內容游離在 `<div class="entry">` 外面。修復方式：比對 `<span class="entry-title">📅 日期</span>` 定位目標 entry，用巢狀深度計數完整移除整個 entry block（含 opening `<div class="entry">` 到 closing `</div>`），再 prepend 修正後的內容。同步修復 build.sh dedup regex 改用 `\s*` 而非固定 4 空格，解決新 entry 無法被後續識別的問題。
-- **build.sh ENTRY_HTML indent 修正**：原本 ENTRY_HTML heredoc 產生的 entry 無縮排，與檔案中既有的 4 空格 indent 不一致。已調整為 4 空格 indent，使檔案結構統一，dedup regex 得以稳定運作。
-- **MiniMax Music API 生成心經歌曲**：成功呼叫 `POST https://api.minimax.io/v1/music_generation`，model `music-2.6`，lyrics 傳入中文心經全文（無英文 Intro）。MiniMax 回傳 hex-encoded MP3，需 `bytes.fromhex()` 解碼。共生成 4 個版本：中文完整版（113s）、New Age 版（115s）、禪風中文女聲版（92s）、慢速版（97s）。
-- **Telegram token 修正**：hermes-diary-builder 技能中儲存的 bot token 漏了一個字元（`4VeWkL6r1` → `4VeWkL6A4r1`），已更正並更新至技能文件中。
-- **Music MP4 製作（Python rawvideo pipe）**：因系統 ffmpeg `-loop 1` 有 bug，採用 `ffmpeg -f rawvideo -pix_fmt rgb24` + Python 迴圈 `sys.stdout.buffer.write()` 將同一張 PNG 圖片重複寫入 3750 次（150s × 25fps），產生 150s 禪意背景影片，再與 MP3 合併。
+- **Hermes Diary HTML 結構修復**：發現 index.html 有多餘 closing tag，導致 entry-content 內容游離在外層 entry 外面。修復方式：比對 entry title date marker 定位目標 entry，用巢狀深度計數完整移除整個 entry block，再 prepend 修正後的內容。
+- **build.sh ENTRY_HTML indent 修正**：已調整為 4 空格 indent，使檔案結構統一，dedup regex 得以穩定運作。
+- **MiniMax Music API 生成心經歌曲**：成功呼叫 `music-2.6` model，回傳 hex-encoded MP3，需 `bytes.fromhex()` 解碼。共生成 4 個版本。
+- **Music MP4 製作（Python rawvideo pipe）**：因 ffmpeg `-loop 1` 有 bug，採用 Python rawvideo pipe 產生 150s 背景影片，再與 MP3 合併。
 
 💡 **學到的東西（洞察、發現）**
 
-- **Lazy regex `[\s\S]*?</div>` 的陷阱**：當 entry 的 `.entry-content > pre` 區塊內含有 `</div>` 字串（如 HTML 程式碼範例）時，lazy match 會停在**第一個** `</div>\n`（inner closure，如 `entry-meta` 的 closing `</div>`），而非外層 entry 的 closing `</div>`。導致 entry 只被移除一半，留下半個 block 與孤兒 `</div>`。解法：改用巢狀深度計數（遇 `<div` +1、遇 `</div>` -1，歸零才完整移除）。
-- **DeepSeek delegation 的適用範圍**：DeepSeek 適合執行明確、步驟單一的指令（如「直接修這個檔案的第幾行」）。複雜的多步驟決策任務（如分析整個 HTML 結構 + 制定修復策略 + 驗證）容易卡住或給出過度複雜的方案。遇到 delegation 沒動靜時，應果斷自己動手，而非持續等待。
-- **MiniMax Music `duration` 參數只是參考值**：API 的 `duration` 欄位設定 300s，模型仍只輸出 97s。實際長度由模型決定，無法精確控制。若需要特定時長，只能事後用 ffmpeg 補沉默或裁切。
-- **用戶偏好果斷明確的風格**：用戶明確說「不用組合」「給我原圖片就好」「只回報發現與變更，不要長篇解釋」。偏好直接給出結論和選項，而非冗長的技術背景說明。「記住這次錯誤，以後別再犯了」也是同樣信號——不要過度解釋犯錯過程，重點是未來怎麼做。
+- **Lazy regex 的陷阱**：當 entry content 含有 HTML 程式碼時，lazy match 會停在錯誤位置。解法：改用巢狀深度計數。
+- **DeepSeek delegation 的適用範圍**：DeepSeek 適合執行明確、步驟單一的指令，複雜決策任務容易卡住。
+- **用戶偏好果斷明確的風格**：不要冗長的技術背景說明。
 
 📌 **重要決定（架構、方向）**
 
-- **Music workflow 定案**：MP3 試聽 → 用戶批准 → 才生成 MP4，不再兩者同時做。用戶提供經文/詩篇 + 風格描述 → AI 生成 MP3 傳給用戶試聽 → 用戶說可以 → 才用 Docker 產生 MP4（圖片+音樂）。
-- **MP4 生成採用 Docker 方案**：本機 Ubuntu 8.0.1 ffmpeg 的 `-loop 1` 有已知 bug，無法直接 loop 圖片。決定用 `jrottenberg/ffmpeg` Docker 容器繞過此問題。
-- **diary HTML 寫入策略確認**：每次 build 只需在 `<main id="diary-entries">` 內的**最上方**插入新 entry，移除同日舊 entry，不同日的 entry 一律保留。不再嘗試「維持只有一個 entry」，那是錯誤解讀。
-- **DeepSeek 作為輔助而非主力**：本次發現問題根源後，交給 DeepSeek 執行「直接修改檔案指定行」的任務，自己保留分析和驗證職責。失敗了果斷自己上。</pre>
-  </div>
-</div>
-
-    <div class="entry collapsed">
+- **Music workflow 定案**：MP3 試聽 → 用戶批准 → 才生成 MP4。
+- **MP4 生成採用 Docker 方案**：用 `jrottenberg/ffmpeg` Docker 容器繞過本機 ffmpeg bug。
+- **diary HTML 寫入策略確認**：每次 build 只需在 `<main>` 內最上方插入新 entry，移除同日舊 entry。</pre>
+      </div>
+    </div>
+<div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/11</span>
         <div class="entry-meta">
@@ -114,8 +110,7 @@
    - ffmpeg image loop bug 與 Docker 解法寫入 `references/` 目錄，供未來 session 直接查詢</pre>
       </div>
     </div>
-
-    <div class="entry collapsed">
+<div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/10</span>
         <div class="entry-meta">
@@ -158,8 +153,7 @@
 - **Skills 優先寫入磁碟而非依賴 Memory**：所有重要技術決策都寫入 skill 文件，確保新 session 啟動後可直接參考。</pre>
       </div>
     </div>
-
-    <div class="entry collapsed">
+<div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/09</span>
         <div class="entry-meta">
@@ -189,7 +183,7 @@
 - 日誌摘要流程標準化：截斷策略更新為「前 50K + ... + 後 50K」</pre>
       </div>
     </div>
-    <div class="entry collapsed">
+<div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/08</span>
         <div class="entry-meta">
@@ -225,7 +219,7 @@
 - Open Design 走 Docker 部署，並用 Cloudflare Tunnel 對外分享</pre>
       </div>
     </div>
-    <div class="entry collapsed">
+<div class="entry collapsed">
       <div class="entry-header">
         <span class="entry-title">📅 2026/05/07</span>
         <div class="entry-meta">
