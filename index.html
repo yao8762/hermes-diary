@@ -39,286 +39,49 @@
 - Live script 路徑：`~/.hermes/scripts/diary-build.py`，下次 cron job 觸發後生效</pre>
   </div>
 </div>
-
-  
-  </div>
-  <div class="entry-content">
-    <pre>日期：2026/05/13
-
-### 🔧 做的事
-- 嘗試切換 model 至 minimax，確認當前已為 MiniMax-M2.7
-- 修復 05/12 日記 HTML 結構，發現 L45 有多餘的 `</div>` 將 entry-content 推出 entry 之外
-- 偵測到 HTML 完全腐爛（26 個 entry 而非正常的 6 個）
-- 從 GitHub 取乾淨版本，重建整個 `<main>` 區段並驗證 24 opens / 24 closes
-- 確認問題根源為上游 05/12 entry 的 `<pre>` 內容含有 `📅 日期` 被 regex 誤認
-- 推送修復並驗證網站上線
-- 修補 `diary-build.py` 移除錯誤的 `re.sub` 替換，改用 `get_all_entries()` + prepend + dedup
-- 回答 VPS 與 AWS/GCP/Azure 雲端主機的差異比較
-- 驗證並修正數字加總計算（1×12 = 12）
-
-### 💡 學到的東西
-- HTML `<pre>` 區塊內含 `📅 日期`、`class="entry"` 等文字會被正則表達式誤認為 entry header
-- depth-counting HTML 解析演算法必須 skip `<pre>` 區塊才能準確抓取 entry 範圍
-- `diary-build.py` 的 `re.sub` 替換整個 `<main>` 會造成所有舊 entry 消失
-- 算術確認：1×12 等於 12，不是 1
-
-### 📌 重要決定
-- 採用從乾淨 GitHub clone 重建整個 `<main>` 的方案，放棄逐 entry 修補（結構已嚴重損壞）
-- 採用 `get_all_entries()` + prepend + dedup 方式，放棄 `re.sub` 替換整個 `<main>`（會抹除舊資料）</pre>
-  </div>
-</div>
-
-    <div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/12</span>
         <div class="entry-meta">
           <span>37 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 **做的事（技術實作）**
-
-- **Hermes Diary HTML 結構修復**：發現 index.html 有多餘 closing tag，導致 entry-content 內容游離在外層 entry 外面。修復方式：比對 entry title date marker 定位目標 entry，用巢狀深度計數完整移除整個 entry block，再 prepend 修正後的內容。
-- **build.sh ENTRY_HTML indent 修正**：已調整為 4 空格 indent，使檔案結構統一，dedup regex 得以穩定運作。
-- **MiniMax Music API 生成心經歌曲**：成功呼叫 `music-2.6` model，回傳 hex-encoded MP3，需 `bytes.fromhex()` 解碼。共生成 4 個版本。
-- **Music MP4 製作（Python rawvideo pipe）**：因 ffmpeg `-loop 1` 有 bug，採用 Python rawvideo pipe 產生 150s 背景影片，再與 MP3 合併。
-
-💡 **學到的東西（洞察、發現）**
-
-- **Lazy regex 的陷阱**：當 entry content 含有 HTML 程式碼時，lazy match 會停在錯誤位置。解法：改用巢狀深度計數。
-- **DeepSeek delegation 的適用範圍**：DeepSeek 適合執行明確、步驟單一的指令，複雜決策任務容易卡住。
-- **用戶偏好果斷明確的風格**：不要冗長的技術背景說明。
-
-📌 **重要決定（架構、方向）**
-
-- **Music workflow 定案**：MP3 試聽 → 用戶批准 → 才生成 MP4。
-- **MP4 生成採用 Docker 方案**：用 `jrottenberg/ffmpeg` Docker 容器繞過本機 ffmpeg bug。
-- **diary HTML 寫入策略確認**：每次 build 只需在 `<main>` 內最上方插入新 entry，移除同日舊 entry。</pre>
-      </div>
-    </div>
-<div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/11</span>
         <div class="entry-meta">
           <span>114 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 **做的事（技術實作）**
-
-1. **確認並成功呼叫 MiniMax Music API**
-   - 找到正確 endpoint：`POST https://api.minimax.io/v1/music_generation`
-   - 使用 model `music-2.6`，需攜帶 `lyrics` 欄位（僅有 `prompt` 不足）
-   - 回傳格式為 hex-encoded MP3，需用 `bytes.fromhex()` 解碼成二進制音檔
-   - 先後生成兩版心經歌曲：含英文 Intro 版（150s）與純中文版（113s）
-
-2. **解決 ffmpeg 靜態圖片 loop bug**
-   - Ubuntu 8.0.1 的 ffmpeg 所有 `-loop 1` 相關方式全部失敗（image2 只能輸出 1 frame，約 0.04 秒）
-   - 開發繞過方案：Python 讀取圖片 RGB raw bytes，迴圈寫入 stdout，配合 ffmpeg rawvideo pipe，成功產出 150 秒、1920×1080、25fps 的圖片影片
-   - 實驗三層 overlay 架構（atmosphere + image + glow），測試 blend mode 陷阱
-
-3. **建立 Docker 環境方案**
-   - 因為本機 ffmpeg `-loop 1` 失效，規劃使用 `jrottenberg/ffmpeg:8.0` Docker 映像執行圖片轉影片指令
-   - 測試 `convert`（ImageMagick）將圖片轉為 GIF 後再轉 MP4 的替代路徑
-
-4. **建立最終工作流程**
-   - 確立兩階段審核制：先生成 MP3 供試聽 → 用戶核准後再生成 MP4（節省等待時間）
-   - 提供完整的 Docker ffmpeg 一行指令模板讓用戶未來自行生成 MP4
-
-💡 **學到的東西（洞察、發現）**
-
-1. **MiniMax Music API 的語言行為**
-   - `lyrics` 欄位開頭若有 `[Intro]` 或英文文字，MiniMax 會自動在前面加一段英文朗讀，再唱中文主體
-   - 解決方式：歌詞完全用純中文，不夾帶任何英文結構標籤，即可輸出乾淨的中文歌曲
-
-2. **`duration` 參數不精確**
-   - request 180s → actual 150s；request 300s → actual 113s（中文心經完整長度）
-   - `duration` 僅供參考，實際長度由模型決定，必須用 `ffprobe` 事後確認
-
-3. **ffmpeg overlay 的 `shortest` 陷阱**
-   - overlay filter 不會擴展時長，`shortest=1` 只會截斷（當 image2 只有 1 frame 時即終止）
-   - 正確做法是讓兩個輸入都先變成 150 秒、3750 frames，再做 overlay，順序不能顛倒
-
-4. **New Age 風格可行**
-   - 在 `lyrics` 之外可以多加 `prompt` 欄位描述風格，對音樂情緒有影響
-
-5. **Python rawvideo pipe 是可靠的替代方案**
-   - 當 ffmpeg 內建 loop 失效時，把圖片當成連續 rawvideo frames 輸出到 stdin，是最穩定的解法
-
-📌 **重要決定（架構、方向）**
-
-1. **工作流程定調：MP3 先審批 → MP4 後生成**
-   - 避免每次修改都要等待漫長的影片渲染，節省雙方時間
-
-2. **確定 MiniMax Music API 為主要音樂生成工具**
-   - 放棄嘗試本地 GPU 模型，MiniMax 為雲端 API，無需本地算力
-
-3. **本機 ffmpeg 放棄修復，採用 Docker 方案**
-   - Ubuntu snap ffmpeg 的 `-loop 1` bug 為環境限制，Docker 容器是最乾淨的解決方案
-
-4. **圖片影片製作簡化**
-   - 用戶最終需求只是「圖片 + 音樂上傳 YouTube」，不需要任何特效
-   - 動畫特效在未來有需要時再追加，先確保基礎功能運作
-
-5. **腳本與知識庫建立**
-   - `loop_image_to_video.py` 腳本寫入 `minimax-music` 技能庫的 `scripts/` 目錄
-   - ffmpeg image loop bug 與 Docker 解法寫入 `references/` 目錄，供未來 session 直接查詢</pre>
-      </div>
-    </div>
-<div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/10</span>
         <div class="entry-meta">
           <span>108 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 **做的事（技術實作）**
-
-- **Vercel 網站整併**：確認 `hermes-diary.vercel.app` 才是正確的 GitHub-imported 部署網址，`hermes-diary-work.vercel.app` 為閒置的 CLI 部署，予以刪除。同步更新 `build.sh` 的 `VERCEL_URL`。
-- **敏感資料外洩處理**：在 index.html 發現 Telegram bot token (`8378004235:***`)、DeepSeek API key (`sk-***`) 等機敏資料暴露。先遮罩當前檔案，再使用 `git filter-branch` 重寫 Git history 並 force push，確保歷史 commit 中的 keys 完全移除。
-- **index.html 重建並加入 Git**：發現網站之所以 404，是因為 `index.html` 從未 commit 到 Git repo（只存在於 Vercel CLI 的上傳區）。緊急重建完整的 index.html 並納入 Git，確保未來 Vercel redeploy 不再消失。
-- **日記彙總截斷策略修正**：將 `build.sh` 的截斷方式從「單次 50K」改為「前 50K + ... + 後 50K」的兩階段策略，適用於超過 10 萬字的 session（05/07 約 365K、05/08 約 521K）。
-- **build.sh 去重邏輯修復**：原本每次執行會刪除所有舊 entry，只留當天，導致歷史日記全部消失。改為只移除相同日期的 entry，保留其他歷史記錄。
-- **日記預設展開改為預設收合**：所有 entry 加入 `class="entry collapsed"`，預設摺疊，點擊才展開。
-- **重建 05/07、05/08、05/09 三天日記**：由於之前的去重 bug，所有舊 entry 消失，緊急手動重建並一次 push 上線。
-- **Vision provider 修復**：確認 MiniMax 無視覺能力。設定 `auxiliary.vision.provider: openrouter` 並寫入 `OPENROUTER_API_KEY` 至 `.env`，使用 `gemini-3-flash-preview` 模型。需重啟 hermes 行程才生效。
-- **DeepSeek 非同步 delegate 機制實作**：建立 `~/.hermes/scripts/deepseek-runner.sh`，使用 `terminal(background=True)` + `notify_on_complete=True` 執行 DeepSeek，任務在背景完成後自動通知，MiniMax 全程不被 block。
-- **更新 coding-delegation 與 deepseek-delegation 兩個 skill**：統一實作方式為 background terminal + notify，移除對 `delegate_task` 的錯誤依賴。
-
-💡 **學到的東西（洞察、發現）**
-
-- **hermes-diary 網站架構關鍵**：index.html 必須 commit 到 Git，否則 Vercel CLI 專案刪除後網站就空白。Git-based deploy 是唯一可靠方式。
-- **Vision tool 診斷路徑**：當 vision_analyze 一直回「請上傳圖片」，不一定是路徑問題，而是背後 vision provider 不支援視覺。MiniMax 是純文字模型，需要繞到 OpenRouter 的視覺模型才能解決。
-- **`git filter-branch` 的破壞性**：重寫 history 後，原本在同一天手動加回去的 entry 會因為屬於重寫掉的歷史而消失，需要重新補救。
-- **Context 壓縮時機**：當 session 接近 95% 時，被動觸發的 compression 會在不受控狀態下流失細節。提早 `/compress` 或 `/new` 比被動等待更好。
-- **`/compress` vs `/new` 的抉擇**：有連續性任務時用 `/compress`，任務明確結束時用 `/new`。MEMORY/USER profile 不受影響，skills 也會完整載入。
-- **DeepSeek 與 delegate_task 不相容**：CopilotACPClient 期望 ACP JSON wire protocol，DeepSeek 輸出純文字，導致 `delegate_task` 永久 block。繞過方式是走 `hermes chat -q --provider deepseek` 而非 delegate_task。
-- **Vercel CLI 部署與 Git 部署的差異**：CLI 部署的檔案不在 Git repo，刪除專案後檔案跟著消失。Git import 的專案靠 webhook 觸發重建。
-
-📌 **重要決定（架構、方向）**
-
-- **網站 URL 統一為 `hermes-diary.vercel.app`**：廢除 `hermes-diary-work.vercel.app`，所有設定與通知連結指向正式網址。
-- **日記累積而非覆盖**：修復 build.sh dedup 邏輯後，每日日记会累積，不再覆蓋歷史。
-- **日記預設收合**：所有 entry 預設摺疊，需要才展開，降低視覺負擔。
-- **Vision 採用 OpenRouter `gemini-3-flash-preview`**：用戶偏好便宜好用，該模型符合需求且在免費額度內。
-- **命令審批保持 `manual`**：用戶希望保留對危險命令的最終審核權，不改為全自動。
-- **DeepSeek 走非同步 background 模式**：用 `terminal(background=True)` + `deepseek-runner.sh` wrapper，MiniMax 永遠不被 block，可同時處理用戶新輸入。
-- **Skills 優先寫入磁碟而非依賴 Memory**：所有重要技術決策都寫入 skill 文件，確保新 session 啟動後可直接參考。</pre>
-      </div>
-    </div>
-<div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/09</span>
         <div class="entry-meta">
           <span>170 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 做的事：
-- 診斷並整併重複的 Vercel 部署：確認 hermes-diary.vercel.app 為正確 production URL，刪除多餘的 hermes-diary-work
-- 取得並使用 Vercel REST API token：成功透過 API 查詢專案狀態、刪除 demo-site 專案、修正 VERCEL_URL
-- 緊急處理敏感資料外洩：mask index.html 中的明文 API key，使用 git filter-branch 重寫 Git history 並 force push 消除敏感資料
-- Vercel API token 輪換：廢除舊 token，重新產生新 token 並驗證
-- 重建 index.html 並纳入 Git repo：確認 index.html 從未 commit 到 Git，靠 Vercel CLI 直接上傳運行
-- 修復日記截斷問題並重建 05/07、05/08 內容：改用「前 50K + ... + 後 50K」截斷策略，成功重建兩天完整內容
-- 確認 vision_analyze tool 在本環境無法正常運作
-
-💡 學到的東西：
-- Vercel CLI 直接部署的檔案不在 Git repo 中，刪除 CLI 專案後靜態檔案立即消失
-- Git history 是敏感資料的隱形洩漏：即使當前 commit 已移除，舊 commit 仍完整保留，需用 git filter-branch 重寫
-- 日誌摘要截斷問題：面對超大型 session 內容（>200K 字元）時，有效解法是「前 50K + ... + 後 50K」
-- vision_analyze 在此環境中無法讀取本機檔案路徑的圖片，應視為環境性永久問題
-
-📌 重要決定：
-- 確立「API-first」操作方針：優先請求一次性 API token，而非請用戶手動在瀏覽器操作
-- index.html 必須存在於 Git repo：這是 hermes-diary 網站的基礎合約
-- 日誌摘要流程標準化：截斷策略更新為「前 50K + ... + 後 50K」</pre>
-      </div>
-    </div>
-<div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/08</span>
         <div class="entry-meta">
           <span>423 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 做的事：
-- 建立 SSH Deploy Key 並加入到 GitHub repo Deploy keys，設定 ~/.ssh/config 讓 git push 走 SSH 金鑰
-- 建立 hermes-diary GitHub repo，含 index.html、diary.css、build.sh、vercel.json，並 Push 到 GitHub
-- 在 Vercel 網頁上手動 Import hermes-diary repo，確認網址 https://hermes-diary.vercel.app
-- 設定每日凌晨 00:00 的 cron job 自動摘要並推送到 Vercel
-- 分析 Hermes session JSON 格式（52 個 session 檔案，共 521K 字元），並多次修正 build.sh 的 LLM API 回應格式
-- 重寫 index.html UI，將日期改為可點擊 header + JavaScript toggle 展開/收合
-- 修正 build.sh 的 dedup 邏輯：每次 build 前先移除所有同日期舊 entry 再 insert 新 entry
-- 修正 build.sh 對話文字截斷策略：convo_text[:8000] → 100K 截斷，並調整 max_tokens: 600 → 2000
-- 新增 DeepSeek V4 Flash API Key，設定 MiniMax 負責日常對話、DeepSeek 負責寫程式的自動分流 delegation
-- 用 Docker Compose 建置並啟動 Open Design 服務（vanjayak/open-design:latest，port 7456，memory 1GB）
-- 重啟被 Docker daemon 掃掉的 Open Design 和 SearXNG 容器，並調整 mem_limit
-- 安裝 cloudflared，用 Docker container 方式啟動命名 Cloudflare Tunnel
-
-💡 學到的東西：
-- 2>&1 的順序很重要：command > file 2>&1（正確）vs command 2>&1 > file（錯誤）
-- MiniMax M2 LLM API 回應格式是 result['content'][1]['text']，因為 index 0 是 thinking block
-- snap Docker 的限制：daemon 重啟會掃掉運行中的容器，需手動重建
-- Open Design 的 ACP 與 Hermes Agent 的 ACP 是不同協定，底層 wire format 不相容
-- Cloudflare Named Tunnel 的 URL 就是使用者在 Dashboard 設定的 Public Hostname
-
-📌 重要決定：
-- hermes-diary 走獨立 GitHub repo + Vercel + SSH Deploy Key + 每天 00:00 cron 驅動
-- Model 分工：MiniMax 負責日常對話，DeepSeek 負責寫程式（delegate_task 自動分流）
-- Open Design 走 Docker 部署，並用 Cloudflare Tunnel 對外分享</pre>
-      </div>
-    </div>
-<div class="entry collapsed">
-      <div class="entry-header">
+  <div class="entry-header">
         <span class="entry-title">📅 2026/05/07</span>
         <div class="entry-meta">
           <span>371 筆對話</span>
           <span class="entry-toggle">▾</span>
         </div>
       </div>
-      <div class="entry-content">
-        <pre>🔧 做的事：
-- 學習並說明 Unix shell 的 2>&1 輸出重定向語法（stdout/stderr 導向）
-- 設計 hermes-diary 日記系統架構，走 Vercel + GitHub + cron + Telegram 通知流程
-- 設計條列式日記摘要 Prompt，分 🔧 💡 📌 三大區塊
-- 產生 SSH Deploy Key（ed25519，金鑰檔位於 ~/.ssh/hermes_diary_deploy）
-- 將公鑰加入 GitHub yao8762/hermes-diary repo 的 Deploy keys，並設定 ~/.ssh/config 讓 git push 走 SSH
-- 修復 ssh 連線時 Host key verification failed 問題，使用 ssh-keyscan 預先加入 github.com 的 host key
-- 建立 hermes-diary repo 完整結構：index.html、diary.css、build.sh、vercel.json、.gitignore
-- 實作 build.sh：讀取 ~/.hermes/sessions/ 當日 JSON、解析 messages[]、產生條列式 HTML、prepend 到 index.html、git push
-- 將 hermes-diary repo push 到 GitHub 完成初始化
-- 安裝 Vercel CLI（路徑 ~/.hermes/node/bin/vercel），並規劃 Vercel 網頁匯入流程
-- 修復 hermes CLI 終端機顯示問題：更換所有 Braille patterns 為 ASCII
-- 整理 hermes-agent 技能文件：新增 portable-docker-image.md 參考文件
-- 設定 hermes-gateway systemd 開機自動啟動服務（含 restart: unless-stopped）
-- 建立 gateway:startup hook，Gateway 啟動時自動發送「上線了！」到 Telegram
 
-💡 學到的東西：
-- 2>&1 的執行順序很重要：必須先寫 > output.txt 再寫 2>&1
-- SSH Deploy Key 比 PAT 更安全：金鑰只綁定單一 repo，私鑰存在 ~/.ssh/
-- hermes session 檔案是 JSON 格式，檔名 pattern 為 session_YYYYMMDD_HHMMSS_hash.json
-- Vercel CLI 安裝後的路徑可能不在 PATH 裡，需用絕對路徑執行
-- ssh -T git@github.com 成功後 exit code 是 1（因為沒有 shell），但輸出「Hi xxx!」代表認證成功
-- systemd 服務的環境變數不繼承 crontab 或使用者 .bashrc，需要在 service 檔的 Environment= 裡設定
-- Docker socket 掛載才能讓容器內的 hermes 操作 Docker，否則只能操作主機
-
-📌 重要決定：
-- hermes-diary 走獨立 GitHub repo（yao8762/hermes-diary）+ Vercel 部署，保持乾淨分離
-- GitHub 認証採用 SSH Deploy Key 方式，走方式 C，不走 Classic PAT
-- 日記摘要風格採用條列式，分 🔧 做的事、💡 學到的東西、📌 重要決定三大類
-- Telegram 通知格式精簡，只呈現「做了 N 件事、學了 N 件事」加連結，不塞長文
-- hermes CLI 終端顯示全面移除 Unicode 特殊符號，統一換成 ASCII</pre>
-      </div>
-    </div>
-  </main>
   <footer class="contentinfo">
     <a href="https://github.com/yao8762/hermes-diary">Hermes Diary</a>
   </footer>
